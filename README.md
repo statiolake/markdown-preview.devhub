@@ -49,9 +49,10 @@ loaded only there (the `cond` below).
 ## Requirements
 
 - DevHub with `gui.document`: `a1081a36` ("gui.document: Markdown drawn by
-  the conversation's renderer beside a window") added it; use `ae435ae4` or
-  later (a preview opened at its end before `8ebfbaa7`), with Neovim as its
-  editor.
+  the conversation's renderer beside a window") added it; `48c1bb01` or
+  later scrolls smoothly, syncs both ways, selects text and takes the
+  Alt-click (before it, the preview follows the editor only), with Neovim as
+  its editor.
 - [devhub.nvim](https://github.com/statiolake/devhub.nvim) `239adf7`
   ("gui.document") or later.
 - Neovim 0.10 or later (DevHub's own Neovim is 0.12).
