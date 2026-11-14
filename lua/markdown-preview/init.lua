@@ -6,9 +6,11 @@
 -- own conversations, its tables, task lists, code colouring, math and
 -- Mermaid); this plugin only decides what to show and when. It sends the
 -- buffer's text when it changes (debounced), keeps the preview's top at the
--- source line the editor's window has at its top (each block of the drawing
--- knows the source line it starts at), and closes the preview with its
--- buffer. Pictures and linked files are found relative to the file, on the
+-- source line the editor's window has at its top and the editor's at the
+-- preview's when it is the preview that is scrolled (each block of the
+-- drawing knows the source line it starts at, measured where it is drawn),
+-- takes an Alt-click in the preview to that place in the source, and closes
+-- the preview with its buffer. Pictures and linked files are found relative to the file, on the
 -- machine Neovim runs on (an SSH host's too), and nothing is fetched.
 --
 -- A DevHub extension: it needs DevHub's GUI and devhub.nvim, and is loaded
@@ -29,6 +31,7 @@ local defaults = {
   debounce = 80,
   -- 'topline': the preview's top follows the window's top line; 'cursor':
   -- it keeps the cursor's line a few lines from its top; false: it stays.
+  -- Either way, scrolling the preview scrolls the window to match.
   sync = 'topline',
   -- Draw pictures from the web (default: a placeholder; a local file is
   -- always drawn).
@@ -39,6 +42,10 @@ local defaults = {
   -- line?, col? }); return true when you handled it. Default: the file
   -- opens in the window the preview was opened from.
   on_link = nil,
+  -- fn(pos, buf): an Alt-click in the preview, pos = { line, col? } in the
+  -- source buf; return true when you handled it. Default: the cursor goes
+  -- there in the source's window, which becomes the current one.
+  on_source_click = nil,
 }
 
 M.config = vim.deepcopy(defaults)
@@ -77,12 +84,18 @@ local function open_preview(p)
   return p and p.doc and p.doc:is_open() ~= false
 end
 
---- The source line the preview should have at its top, for buf's window.
-local function wanted_line(buf)
+--- The window buf is edited in: the current one, else the first.
+local function source_win(buf)
   local win = vim.api.nvim_get_current_win()
   if vim.api.nvim_win_get_buf(win) ~= buf then
     win = vim.fn.win_findbuf(buf)[1]
   end
+  return win
+end
+
+--- The source line the preview should have at its top, for buf's window.
+local function wanted_line(buf)
+  local win = source_win(buf)
   if not win then
     return nil
   end
@@ -101,6 +114,59 @@ local function sync(p)
     p.line = line
     p.doc:scroll_to(line)
   end
+end
+
+--- The person scrolled the preview: the source's window shows what it shows,
+--- from its top line (the cursor kept in sight). What this makes the
+--- source want is taken as said, so its scroll is not sent back.
+local function follow_preview(p, view)
+  if not M.config.sync or previews[p.buf] ~= p or type(view) ~= 'table' then
+    return
+  end
+  local win = source_win(p.buf)
+  if not win or type(view.top) ~= 'number' then
+    return
+  end
+  vim.api.nvim_win_call(win, function()
+    local count = vim.api.nvim_buf_line_count(p.buf)
+    local top = math.min(math.max(1, view.top), count)
+    if vim.fn.line('w0') == top then
+      return
+    end
+    local height = vim.api.nvim_win_get_height(0)
+    local so = math.min(vim.wo.scrolloff, math.floor((height - 1) / 2))
+    local lnum = vim.fn.line('.')
+    local lo = top + (top > 1 and so or 0)
+    local hi = math.max(lo, top + height - 1 - so)
+    vim.fn.winrestview({ topline = top, lnum = math.min(math.max(lnum, lo), math.min(hi, count)) })
+    -- Wrapped lines above the cursor push it out of sight, and Neovim would
+    -- scroll back to it: it goes to the line its side of the view keeps.
+    if vim.fn.line('w0') ~= top then
+      vim.fn.winrestview({ topline = top, lnum = lnum < top and lo or math.max(lo, vim.fn.line('w$') - so) })
+      if vim.fn.line('w0') ~= top then
+        vim.fn.winrestview({ topline = top, lnum = lo })
+      end
+    end
+  end)
+  p.line = wanted_line(p.buf)
+end
+
+--- An Alt-click in the preview: the cursor to that place in the source.
+local function go_to_source(p, pos)
+  if previews[p.buf] ~= p or type(pos) ~= 'table' or type(pos.line) ~= 'number' then
+    return
+  end
+  if M.config.on_source_click and M.config.on_source_click(pos, p.buf) then
+    return
+  end
+  local win = source_win(p.buf)
+  if not win then
+    return
+  end
+  local count = vim.api.nvim_buf_line_count(p.buf)
+  local line = math.min(math.max(1, pos.line), count)
+  vim.api.nvim_set_current_win(win)
+  pcall(vim.api.nvim_win_set_cursor, win, { line, math.max(0, (pos.col or 1) - 1) })
 end
 
 local function stop_timer(p)
@@ -235,6 +301,12 @@ function M.open(buf)
     remote_images = M.config.remote_images,
     on_link = M.config.on_link,
     scroll = { line = wanted_line(buf) or 1 },
+    on_view = function(_, view)
+      follow_preview(p, view)
+    end,
+    on_source_click = function(_, pos)
+      go_to_source(p, pos)
+    end,
     on_close = function()
       -- q, :close: let go of it (not when it was this plugin's own stop).
       if previews[p.buf] == p then

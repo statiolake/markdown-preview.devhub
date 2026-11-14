@@ -95,6 +95,46 @@ local count = #d.scrolls
 vim.api.nvim_exec_autocmds('CursorMoved', { buffer = notes })
 check(#d.scrolls == count, 'no scroll when the top did not move')
 
+-- Scrolling the preview: the editor's top follows it, and what that does
+-- to the editor is not sent back to the preview (no loop).
+count = #d.scrolls
+d.opts.on_view(d, { top = 40, bottom = 60 })
+check(vim.fn.line 'w0' == 40, 'the editor follows the preview: ' .. vim.fn.line 'w0')
+check(vim.fn.line '.' >= 40 and vim.fn.line '.' < 40 + vim.api.nvim_win_get_height(0), 'its cursor kept in sight')
+vim.api.nvim_exec_autocmds('WinScrolled', {})
+vim.api.nvim_exec_autocmds('CursorMoved', { buffer = notes })
+check(#d.scrolls == count, 'the preview is not told back what it said')
+-- A run of the preview's frames, then the editor scrolled by itself again:
+-- each side ends where the other is.
+for top = 41, 70 do
+  d.opts.on_view(d, { top = top, bottom = top + 20 })
+end
+vim.api.nvim_exec_autocmds('WinScrolled', {})
+check(vim.fn.line 'w0' == 70 and #d.scrolls == count, 'frames followed, none sent back')
+vim.cmd 'normal! 120Gzt'
+vim.api.nvim_exec_autocmds('WinScrolled', {})
+check(d.scrolls[#d.scrolls] == 120, 'and the editor leads again: ' .. tostring(d.scrolls[#d.scrolls]))
+
+-- An Alt-click in the preview: the cursor to that place in the source, in
+-- its window, which becomes the current one.
+vim.cmd 'botright vsplit | enew'
+local elsewhere = vim.api.nvim_get_current_win()
+d.opts.on_source_click(d, { line = 12, col = 3 })
+check(vim.api.nvim_get_current_buf() == notes, 'the source window is current')
+local cur = vim.api.nvim_win_get_cursor(0)
+check(cur[1] == 12 and cur[2] == 2, 'the cursor at line 12, column 3: ' .. vim.inspect(cur))
+d.opts.on_source_click(d, { line = 30 })
+check(vim.api.nvim_win_get_cursor(0)[1] == 30, 'a line alone')
+local heard
+mp.config.on_source_click = function(pos, buf)
+  heard = { pos = pos, buf = buf }
+  return true
+end
+d.opts.on_source_click(d, { line = 5 })
+check(heard and heard.pos.line == 5 and heard.buf == notes and vim.fn.line '.' == 30, 'on_source_click is asked first')
+mp.config.on_source_click = nil
+vim.api.nvim_win_close(elsewhere, true)
+
 -- Another buffer: a preview of its own (follow = false).
 vim.cmd.edit(dir .. '/other.md')
 local other = vim.api.nvim_get_current_buf()

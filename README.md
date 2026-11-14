@@ -20,9 +20,14 @@ loaded only there (the `cond` below).
 
 - **Live**: the buffer's text goes to the preview when typing pauses
   (`debounce`, 80 ms), in Normal and Insert mode alike.
-- **Scroll sync**: the preview's top is the source line at the top of your
-  window. Every block of the drawing knows the source line it starts at, so
-  a tall table, picture or diagram above does not throw it off.
+- **Scroll sync, both ways**: the preview's top is the source line at the
+  top of your window, and scrolling the preview (its keys, the wheel)
+  scrolls your window to match. Every block of the drawing knows the source
+  line it starts at and is measured where it is drawn, so a tall table,
+  picture or diagram above does not throw it off; neither side echoes the
+  other, so they settle together. Scrolling eases as DevHub's editor does.
+- **Alt-click** in the preview takes your cursor to that place in the source
+  (the line, and the column when the text clicked says it), in your window.
 - **One preview per buffer**, closed when its buffer is wiped. With
   `follow = true` there is one preview, and it shows whichever Markdown
   buffer you go to.
@@ -38,6 +43,8 @@ loaded only there (the `cond` below).
   `<Tab>`/`<S-Tab>` move between links and `<CR>` follows one; `<Esc>`
   goes back to your window; `q` closes it. `/` searches its text. The wheel
   scrolls it too; nothing needs the mouse.
+- **Mouse**: drag to select the rendered text (double click a word, triple
+  click a paragraph), ⌘C or the right-click menu to copy it.
 
 ## Requirements
 
@@ -91,6 +98,7 @@ require('markdown-preview').setup {
   remote_images = false,   -- draw pictures from the web
   filetypes = { 'markdown' },
   on_link = nil,           -- fn(link): a link to a file followed ({ path, line?, col? }); true if handled
+  on_source_click = nil,   -- fn(pos, buf): an Alt-click in the preview ({ line, col? }); true if handled
 }
 ```
 
