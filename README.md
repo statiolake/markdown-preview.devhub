@@ -41,9 +41,10 @@ loaded only there (the `cond` below).
 
 ## Requirements
 
-- DevHub with `gui.document` (`22ca86d1`, "gui.document: Markdown drawn by
-  the conversation's renderer beside a window", or later), with Neovim as
-  its editor.
+- DevHub with `gui.document`: `a1081a36` ("gui.document: Markdown drawn by
+  the conversation's renderer beside a window") added it; use `ae435ae4` or
+  later (a preview opened at its end before `8ebfbaa7`), with Neovim as its
+  editor.
 - [devhub.nvim](https://github.com/statiolake/devhub.nvim) `239adf7`
   ("gui.document") or later.
 - Neovim 0.10 or later (DevHub's own Neovim is 0.12).
